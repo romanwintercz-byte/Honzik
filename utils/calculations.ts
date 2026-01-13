@@ -1,6 +1,13 @@
 
 import { LoanDetails, AmortizationSchedule, PaymentEntry, HistoryEvent } from '../types';
 
+/**
+ * Standard financial rounding to 2 decimal places
+ */
+const round = (num: number): number => {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+};
+
 export const calculateAmortization = (details: LoanDetails): AmortizationSchedule => {
   const { principal, interestRate, years, startDate, extraPayments = [] } = details;
   const numberOfPayments = Math.max(1, years * 12);
@@ -11,11 +18,12 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   // 1. Calculate Theoretical Monthly Payment
   let theoreticalMonthlyPayment = 0;
   if (interestRate === 0) {
-    theoreticalMonthlyPayment = principal / numberOfPayments;
+    theoreticalMonthlyPayment = round(principal / numberOfPayments);
   } else {
-    theoreticalMonthlyPayment =
+    theoreticalMonthlyPayment = round(
       (principal * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) /
-      (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+      (Math.pow(1 + monthlyRate, numberOfPayments) - 1)
+    );
   }
 
   // 2. Generate Theoretical Schedule
@@ -24,10 +32,10 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   let theoreticalTotalInterest = 0;
 
   for (let i = 1; i <= numberOfPayments; i++) {
-    const interestPart = theoreticalBalance * (interestRate / 100 / 12);
-    const principalPart = theoreticalMonthlyPayment - interestPart;
-    theoreticalBalance -= principalPart;
-    theoreticalTotalInterest += interestPart;
+    const interestPart = round(theoreticalBalance * monthlyRate);
+    const principalPart = round(theoreticalMonthlyPayment - interestPart);
+    theoreticalBalance = round(theoreticalBalance - principalPart);
+    theoreticalTotalInterest = round(theoreticalTotalInterest + interestPart);
 
     const paymentDate = new Date(start);
     paymentDate.setMonth(start.getMonth() + i);
@@ -50,8 +58,9 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   
   const sortedExtras = [...extraPayments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  for (let i = 1; i <= 600; i++) {
-    if (actualBalance <= 0.01) break;
+  // Safety limit 1200 months (100 years)
+  for (let i = 1; i <= 1200; i++) {
+    if (actualBalance <= 0) break;
 
     const paymentDate = new Date(start);
     paymentDate.setMonth(start.getMonth() + i);
@@ -61,21 +70,23 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     const monthEnd = new Date(start);
     monthEnd.setMonth(start.getMonth() + i);
 
-    const interestPart = actualBalance * (interestRate / 100 / 12);
-    actualTotalInterest += interestPart;
+    const interestPart = round(actualBalance * monthlyRate);
+    actualTotalInterest = round(actualTotalInterest + interestPart);
     
-    let monthlyPrincipalPart = Math.min(actualBalance, theoreticalMonthlyPayment - interestPart);
-    actualBalance -= monthlyPrincipalPart;
+    // Monthly regular payment
+    let monthlyPrincipalPart = round(Math.min(actualBalance, theoreticalMonthlyPayment - interestPart));
+    actualBalance = round(actualBalance - monthlyPrincipalPart);
     
     history.push({
       date: paymentDate.toISOString().split('T')[0],
-      amount: monthlyPrincipalPart + interestPart,
+      amount: round(monthlyPrincipalPart + interestPart),
       type: 'regular',
       label: 'Měsíční splátka',
       balance: Math.max(0, actualBalance),
       isProjected: paymentDate > today
     });
 
+    // Check extra payments in this window
     const extrasThisMonth = sortedExtras.filter(ex => {
       const exDate = new Date(ex.date);
       return exDate >= monthStart && exDate < monthEnd;
@@ -83,9 +94,10 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
 
     let extraPrincipalInMonth = 0;
     for (const ex of extrasThisMonth) {
-      const exAmount = Math.min(actualBalance, ex.amount);
-      actualBalance -= exAmount;
-      extraPrincipalInMonth += exAmount;
+      if (actualBalance <= 0) break;
+      const exAmount = round(Math.min(actualBalance, ex.amount));
+      actualBalance = round(actualBalance - exAmount);
+      extraPrincipalInMonth = round(extraPrincipalInMonth + exAmount);
       
       history.push({
         date: ex.date,
@@ -100,8 +112,8 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     actualPayments.push({
       period: i,
       date: paymentDate.toLocaleDateString('cs-CZ', { year: 'numeric', month: 'short' }),
-      payment: theoreticalMonthlyPayment + extraPrincipalInMonth,
-      principalPart: monthlyPrincipalPart + extraPrincipalInMonth,
+      payment: round(theoreticalMonthlyPayment + extraPrincipalInMonth),
+      principalPart: round(monthlyPrincipalPart + extraPrincipalInMonth),
       interestPart,
       remainingBalance: Math.max(0, actualBalance),
       isProjected: paymentDate > today
@@ -110,16 +122,14 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
 
   const sortedHistory = history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  // Calculate summary metrics
-  const paidToDate = sortedHistory
+  const paidToDate = round(sortedHistory
     .filter(h => !h.isProjected)
-    .reduce((sum, h) => sum + h.amount, 0);
+    .reduce((sum, h) => sum + h.amount, 0));
 
-  const extraPaidToDate = sortedHistory
+  const extraPaidToDate = round(sortedHistory
     .filter(h => !h.isProjected && h.type === 'extra')
-    .reduce((sum, h) => sum + h.amount, 0);
+    .reduce((sum, h) => sum + h.amount, 0));
 
-  // Find the current balance from history (last entry before today or initial principal)
   const pastEvents = sortedHistory.filter(h => !h.isProjected);
   const currentBalance = pastEvents.length > 0 ? pastEvents[pastEvents.length - 1].balance : principal;
   
@@ -130,9 +140,9 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   return {
     monthlyPayment: theoreticalMonthlyPayment,
     totalInterest: theoreticalTotalInterest,
-    totalPaid: principal + theoreticalTotalInterest,
+    totalPaid: round(principal + theoreticalTotalInterest),
     actualTotalInterest,
-    actualTotalPaid: principal + actualTotalInterest,
+    actualTotalPaid: round(principal + actualTotalInterest),
     paidToDate,
     extraPaidToDate,
     currentBalance,
@@ -147,6 +157,7 @@ export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('cs-CZ', {
     style: 'currency',
     currency: 'CZK',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 };
