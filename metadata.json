@@ -1,0 +1,5 @@
+{
+  "name": "Sledování Půjčky AI",
+  "description": "Moderní aplikace pro sledování splácení půjčky s vizualizací dat a inteligentním poradcem poháněným Gemini AI.",
+  "requestFramePermissions": []
+}
