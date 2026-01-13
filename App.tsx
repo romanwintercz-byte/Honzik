@@ -35,11 +35,6 @@ const App: React.FC = () => {
     return calculateAmortization(loanDetails);
   }, [loanDetails]);
 
-  const projectedEndDate = useMemo(() => {
-    if (amortizationSchedule.actualPayments.length === 0) return '-';
-    return amortizationSchedule.actualPayments[amortizationSchedule.actualPayments.length - 1].date;
-  }, [amortizationSchedule]);
-
   const timeSaved = useMemo(() => {
     const diff = amortizationSchedule.payments.length - amortizationSchedule.actualPayments.length;
     if (diff <= 0) return null;
@@ -85,7 +80,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500">Předpokládaný konec:</span>
-                  <span className="font-bold text-emerald-600">{projectedEndDate}</span>
+                  <span className="font-bold text-emerald-600">{amortizationSchedule.projectedEndDate}</span>
                 </div>
                 {timeSaved && (
                   <div className="pt-4 border-t border-slate-100 flex justify-between items-center">

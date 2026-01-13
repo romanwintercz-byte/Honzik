@@ -46,26 +46,24 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   const actualPayments: PaymentEntry[] = [];
   const history: HistoryEvent[] = [];
   let actualBalance = principal;
+  let actualTotalInterest = 0;
   
   const sortedExtras = [...extraPayments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // We loop until the balance is gone, up to a safety limit
-  for (let i = 1; i <= 600; i++) { // Max 50 years
+  for (let i = 1; i <= 600; i++) {
     if (actualBalance <= 0.01) break;
 
     const paymentDate = new Date(start);
     paymentDate.setMonth(start.getMonth() + i);
     
-    // Period start/end for checking extra payments
     const monthStart = new Date(start);
     monthStart.setMonth(start.getMonth() + i - 1);
     const monthEnd = new Date(start);
     monthEnd.setMonth(start.getMonth() + i);
 
-    // Interest for this month
     const interestPart = actualBalance * (interestRate / 100 / 12);
+    actualTotalInterest += interestPart;
     
-    // 1. Process regular payment
     let monthlyPrincipalPart = Math.min(actualBalance, theoreticalMonthlyPayment - interestPart);
     actualBalance -= monthlyPrincipalPart;
     
@@ -78,7 +76,6 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
       isProjected: paymentDate > today
     });
 
-    // 2. Process extra payments occurring within this month window
     const extrasThisMonth = sortedExtras.filter(ex => {
       const exDate = new Date(ex.date);
       return exDate >= monthStart && exDate < monthEnd;
@@ -111,13 +108,38 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     });
   }
 
+  const sortedHistory = history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  // Calculate summary metrics
+  const paidToDate = sortedHistory
+    .filter(h => !h.isProjected)
+    .reduce((sum, h) => sum + h.amount, 0);
+
+  const extraPaidToDate = sortedHistory
+    .filter(h => !h.isProjected && h.type === 'extra')
+    .reduce((sum, h) => sum + h.amount, 0);
+
+  // Find the current balance from history (last entry before today or initial principal)
+  const pastEvents = sortedHistory.filter(h => !h.isProjected);
+  const currentBalance = pastEvents.length > 0 ? pastEvents[pastEvents.length - 1].balance : principal;
+  
+  const projectedEndDate = actualPayments.length > 0 
+    ? actualPayments[actualPayments.length - 1].date 
+    : '-';
+
   return {
     monthlyPayment: theoreticalMonthlyPayment,
     totalInterest: theoreticalTotalInterest,
     totalPaid: principal + theoreticalTotalInterest,
+    actualTotalInterest,
+    actualTotalPaid: principal + actualTotalInterest,
+    paidToDate,
+    extraPaidToDate,
+    currentBalance,
+    projectedEndDate,
     payments: theoreticalPayments,
     actualPayments: actualPayments,
-    history: history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    history: sortedHistory
   };
 };
 

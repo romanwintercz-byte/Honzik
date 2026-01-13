@@ -35,8 +35,14 @@ export interface HistoryEvent {
 
 export interface AmortizationSchedule {
   monthlyPayment: number;
-  totalInterest: number;
-  totalPaid: number;
+  totalInterest: number; // Theoretical
+  totalPaid: number;     // Theoretical
+  actualTotalInterest: number;
+  actualTotalPaid: number;
+  paidToDate: number;
+  extraPaidToDate: number;
+  currentBalance: number;
+  projectedEndDate: string;
   payments: PaymentEntry[];
   actualPayments: PaymentEntry[];
   history: HistoryEvent[];
