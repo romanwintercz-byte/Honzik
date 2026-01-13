@@ -43,24 +43,38 @@ const LoanForm: React.FC<LoanFormProps> = ({ details, onChange }) => {
             className={inputClasses}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">Doba splácení (roky)</label>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Doba (roky)</label>
+            <input
+              type="number"
+              name="years"
+              value={details.years}
+              onChange={handleChange}
+              className={inputClasses}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Zahájení</label>
+            <input
+              type="date"
+              name="startDate"
+              value={details.startDate}
+              onChange={handleChange}
+              className={inputClasses}
+            />
+          </div>
+        </div>
+        <div className="pt-2 border-t border-slate-100">
+          <label className="block text-sm font-bold text-blue-600 mb-1">Vlastní měsíční splátka (Kč)</label>
+          <p className="text-[10px] text-slate-400 mb-2 leading-tight">Ponechte 0 pro výpočet standardní anuity dle délky půjčky.</p>
           <input
             type="number"
-            name="years"
-            value={details.years}
+            name="customMonthlyPayment"
+            value={details.customMonthlyPayment || 0}
             onChange={handleChange}
-            className={inputClasses}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">Datum zahájení</label>
-          <input
-            type="date"
-            name="startDate"
-            value={details.startDate}
-            onChange={handleChange}
-            className={inputClasses}
+            placeholder="např. 15000"
+            className={`${inputClasses} border-blue-200 focus:ring-blue-400`}
           />
         </div>
       </div>

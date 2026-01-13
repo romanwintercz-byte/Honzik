@@ -9,13 +9,13 @@ const round = (num: number): number => {
 };
 
 export const calculateAmortization = (details: LoanDetails): AmortizationSchedule => {
-  const { principal, interestRate, years, startDate, extraPayments = [] } = details;
+  const { principal, interestRate, years, startDate, extraPayments = [], customMonthlyPayment } = details;
   const numberOfPayments = Math.max(1, years * 12);
   const start = new Date(startDate);
   const monthlyRate = interestRate / 100 / 12;
   const today = new Date();
 
-  // 1. Calculate Theoretical Monthly Payment
+  // 1. Calculate Theoretical Monthly Payment (Annuity)
   let theoreticalMonthlyPayment = 0;
   if (interestRate === 0) {
     theoreticalMonthlyPayment = round(principal / numberOfPayments);
@@ -26,7 +26,12 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     );
   }
 
-  // 2. Generate Theoretical Schedule
+  // Determine effective payment used for calculations
+  const effectiveMonthlyPayment = (customMonthlyPayment && customMonthlyPayment > 0) 
+    ? customMonthlyPayment 
+    : theoreticalMonthlyPayment;
+
+  // 2. Generate Theoretical Schedule (Always based on the original annuity to show comparison)
   const theoreticalPayments: PaymentEntry[] = [];
   let theoreticalBalance = principal;
   let theoreticalTotalInterest = 0;
@@ -58,7 +63,7 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
   
   const sortedExtras = [...extraPayments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Safety limit 1200 months (100 years)
+  // Safety limit 1200 months (100 years) to prevent infinite loops if interest > payment
   for (let i = 1; i <= 1200; i++) {
     if (actualBalance <= 0) break;
 
@@ -71,10 +76,18 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     monthEnd.setMonth(start.getMonth() + i);
 
     const interestPart = round(actualBalance * monthlyRate);
+    
+    // Check if the payment covers at least the interest
+    if (effectiveMonthlyPayment <= interestPart && actualBalance > 0) {
+        // If payment doesn't even cover interest, the loan will never be paid off.
+        // We stop here to prevent infinite loop and reflect the reality.
+        break;
+    }
+
     actualTotalInterest = round(actualTotalInterest + interestPart);
     
     // Monthly regular payment
-    let monthlyPrincipalPart = round(Math.min(actualBalance, theoreticalMonthlyPayment - interestPart));
+    let monthlyPrincipalPart = round(Math.min(actualBalance, effectiveMonthlyPayment - interestPart));
     actualBalance = round(actualBalance - monthlyPrincipalPart);
     
     history.push({
@@ -112,7 +125,7 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     actualPayments.push({
       period: i,
       date: paymentDate.toLocaleDateString('cs-CZ', { year: 'numeric', month: 'short' }),
-      payment: round(theoreticalMonthlyPayment + extraPrincipalInMonth),
+      payment: round((monthlyPrincipalPart + interestPart) + extraPrincipalInMonth),
       principalPart: round(monthlyPrincipalPart + extraPrincipalInMonth),
       interestPart,
       remainingBalance: Math.max(0, actualBalance),
@@ -138,7 +151,7 @@ export const calculateAmortization = (details: LoanDetails): AmortizationSchedul
     : '-';
 
   return {
-    monthlyPayment: theoreticalMonthlyPayment,
+    monthlyPayment: effectiveMonthlyPayment,
     totalInterest: theoreticalTotalInterest,
     totalPaid: round(principal + theoreticalTotalInterest),
     actualTotalInterest,

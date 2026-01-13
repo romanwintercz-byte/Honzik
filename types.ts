@@ -12,6 +12,7 @@ export interface LoanDetails {
   years: number;
   startDate: string;
   extraPayments: ExtraPayment[];
+  customMonthlyPayment?: number;
 }
 
 export interface PaymentEntry {
